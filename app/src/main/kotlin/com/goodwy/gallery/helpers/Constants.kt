@@ -307,5 +307,6 @@ fun whatsNewList(): ArrayList<Release> {
         add(Release(650, R.string.release_650))
         add(Release(700, R.string.release_700))
         add(Release(820, R.string.release_820))
+        add(Release(830, R.string.release_830))
     }
 }

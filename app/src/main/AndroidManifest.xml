@@ -115,6 +115,7 @@
                 <data android:mimeType="video/*" />
                 <data android:mimeType="vnd.android.cursor.dir/image" />
                 <data android:mimeType="vnd.android.cursor.dir/video" />
+                <data android:scheme="com.goodwy.dialer.scheme" />
             </intent-filter>
         </activity>
 
