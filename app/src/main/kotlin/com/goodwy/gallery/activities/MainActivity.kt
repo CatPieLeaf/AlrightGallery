@@ -602,6 +602,14 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 return@handleMediaPermissions
             }
 
+            // onResume() (which calls this) still fires once more even after
+            // onActivityResult() already called finish() to return a picked item to the
+            // caller - without this guard, that "zombie" resume would relaunch
+            // MediaActivity on top of the activity that's already on its way out
+            if (isFinishing || isDestroyed) {
+                return@handleMediaPermissions
+            }
+
             if (!mWasDefaultFolderChecked) {
                 mWasDefaultFolderChecked = true
                 if (config.defaultFolder.isNotEmpty()) {
