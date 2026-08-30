@@ -623,6 +623,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     // called from multiple rescan coroutines at once; only actually refreshes the
     // RecyclerView every FOLDER_LIST_UI_THROTTLE_MS instead of on every single folder
     private fun requestThrottledDirsUpdate(dirs: ArrayList<Directory>, force: Boolean = false) {
+        if (isDestroyed || isFinishing) {
+            return
+        }
+
         val now = SystemClock.elapsedRealtime()
         val shouldUpdate = synchronized(mFolderListUpdateLock) {
             if (force || now - mLastFolderListUpdateMs >= FOLDER_LIST_UI_THROTTLE_MS) {

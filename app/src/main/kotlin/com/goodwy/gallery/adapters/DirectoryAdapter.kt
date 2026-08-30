@@ -1008,6 +1008,11 @@ class DirectoryAdapter(
     }
 
     private fun clearPrefetchRequests() {
+        if (preloadTargets.isEmpty() || activity.isDestroyed) {
+            preloadTargets.clear()
+            return
+        }
+
         preloadTargets.forEach { Glide.with(activity).clear(it) }
         preloadTargets.clear()
     }
