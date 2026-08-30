@@ -36,8 +36,13 @@ open class SimpleActivity : BaseSimpleActivity() {
             if (uri != null) {
                 val path = getRealPathFromURI(uri)
                 if (path != null) {
-                    updateDirectoryPath(path.getParentPath())
-                    addPathToDB(path)
+                    // onChange() runs on the main thread (ContentObserver(null) posts to the
+                    // looper it was created on); updateDirectoryPath() does file listing + DB
+                    // writes, so keep it off the UI thread like NewPhotoFetcher already does
+                    ensureBackgroundThread {
+                        updateDirectoryPath(path.getParentPath())
+                        addPathToDB(path)
+                    }
                 }
             }
         }
