@@ -1,6 +1,6 @@
 [versions]
 #jetbrains
-kotlin = "2.3.10"
+kotlin = "2.3.20"
 #KSP
 ksp = "2.3.5"
 #Detekt
@@ -21,7 +21,7 @@ right-commons = "3e4d22538b"
 behavioRule = "1.0.1"
 rxAnimation = "2.1.1"
 #Gradle
-gradlePlugins-agp = "9.0.1"
+gradlePlugins-agp = "9.2.0"
 #Other
 androidGifDrawable = "1.2.31"
 androidImageCropper = "4.7.0"
