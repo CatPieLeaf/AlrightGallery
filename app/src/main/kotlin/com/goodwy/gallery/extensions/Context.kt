@@ -1676,6 +1676,33 @@ fun Context.getFileDateTaken(path: String): Long {
     return 0L
 }
 
+// same as getFileDateTaken(), but for many paths in one query instead of one round-trip per path
+fun Context.getFileDateTakens(paths: Collection<String>): Map<String, Long> {
+    if (paths.isEmpty()) {
+        return emptyMap()
+    }
+
+    val result = HashMap<String, Long>()
+    val projection = arrayOf(Images.Media.DATA, Images.Media.DATE_TAKEN)
+    val uri = Files.getContentUri("external")
+
+    paths.chunked(500).forEach { chunk ->
+        val selection = "${Images.Media.DATA} IN (${chunk.joinToString(",") { "?" }})"
+        try {
+            val cursor = contentResolver.query(uri, projection, selection, chunk.toTypedArray(), null)
+            cursor?.use {
+                while (it.moveToNext()) {
+                    val path = it.getStringValue(Images.Media.DATA)
+                    result[path] = it.getLongValue(Images.Media.DATE_TAKEN)
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+    }
+
+    return result
+}
+
 fun Context.getCompressionFormatFromUri(uri: Uri): CompressFormat {
     val type = getMimeTypeFromUri(uri)
     return when {

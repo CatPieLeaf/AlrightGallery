@@ -609,11 +609,13 @@ fun AppCompatActivity.fixDateTaken(
 
         ensureBackgroundThread {
             val dateTakens = ArrayList<DateTaken>()
+            val processedPaths = ArrayList<String>()
 
             for (path in paths) {
                 try {
-                    val dateTime: String = ExifInterface(path).getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
-                        ?: ExifInterface(path).getAttribute(ExifInterface.TAG_DATETIME) ?: continue
+                    val exif = ExifInterface(path)
+                    val dateTime: String = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                        ?: exif.getAttribute(ExifInterface.TAG_DATETIME) ?: continue
 
                     // some formats contain a "T" in the middle, some don't
                     // sample dates: 2015-07-26T14:55:23, 2018:09:05 15:09:05
@@ -650,11 +652,18 @@ fun AppCompatActivity.fixDateTaken(
                         File(path).lastModified()
                     )
                     dateTakens.add(dateTaken)
-                    if (!hasRescanned && getFileDateTaken(path) == 0L) {
-                        pathsToRescan.add(path)
-                    }
+                    processedPaths.add(path)
                 } catch (e: Exception) {
                     continue
+                }
+            }
+
+            if (!hasRescanned && processedPaths.isNotEmpty()) {
+                val dateTakenByPath = getFileDateTakens(processedPaths)
+                processedPaths.forEach { path ->
+                    if ((dateTakenByPath[path] ?: 0L) == 0L) {
+                        pathsToRescan.add(path)
+                    }
                 }
             }
 
