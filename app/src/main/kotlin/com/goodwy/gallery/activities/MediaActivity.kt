@@ -56,6 +56,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private val LAST_MEDIA_CHECK_PERIOD = 3000L
 
     private var mPath = ""
+    private var mHasRestoredScrollPosition = false
     private var mIsGetImageIntent = false
     private var mIsGetVideoIntent = false
     private var mIsGetAnyIntent = false
@@ -262,6 +263,12 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
         if (!mMedia.isEmpty()) {
             mCurrAsyncTask?.stopFetching()
+        }
+
+        if (mPath.isNotEmpty()) {
+            LastFolderSession.path = mPath
+            LastFolderSession.scrollPosition =
+                (binding.mediaGrid.layoutManager as? GridLayoutManager)?.findFirstVisibleItemPosition() ?: 0
         }
     }
 
@@ -1139,6 +1146,12 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             }
             binding.mediaFastscroller.beVisibleIf(binding.mediaEmptyTextPlaceholder.isGone())
             setupAdapter()
+
+            if (!mHasRestoredScrollPosition && media.isNotEmpty() && LastFolderSession.path == mPath) {
+                mHasRestoredScrollPosition = true
+                val position = LastFolderSession.scrollPosition.coerceIn(0, media.lastIndex)
+                binding.mediaGrid.scrollToPosition(position)
+            }
         }
 
         mLatestMediaId = getLatestMediaId()

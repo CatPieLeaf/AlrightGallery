@@ -166,7 +166,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             )
         }
 
-        binding.directoriesRefreshLayout.setOnRefreshListener { getDirectories() }
+        binding.directoriesRefreshLayout.setOnRefreshListener { getDirectories(isManualRefresh = true) }
         storeStateVariables()
 
         setupLatestMediaId()
@@ -603,8 +603,15 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             }
 
             if (!mWasDefaultFolderChecked) {
-                openDefaultFolder()
                 mWasDefaultFolderChecked = true
+                if (config.defaultFolder.isNotEmpty()) {
+                    openDefaultFolder()
+                } else if (mIsThirdPartyIntent) {
+                    // reopened (process still warm) from another app's image picker -
+                    // resume the folder/scroll position the user was last browsing
+                    // instead of dumping them back at the folder list every time
+                    openLastWarmSessionFolder()
+                }
             }
 
             checkOTGPath()
@@ -622,8 +629,8 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
     // called from multiple rescan coroutines at once; only actually refreshes the
     // RecyclerView every FOLDER_LIST_UI_THROTTLE_MS instead of on every single folder
-    private fun requestThrottledDirsUpdate(dirs: ArrayList<Directory>, force: Boolean = false) {
-        if (isDestroyed || isFinishing) {
+    private fun requestThrottledDirsUpdate(dirs: ArrayList<Directory>, force: Boolean = false, suppress: Boolean = false) {
+        if (isDestroyed || isFinishing || suppress) {
             return
         }
 
@@ -642,9 +649,14 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         }
     }
 
-    private fun getDirectories() {
+    private fun getDirectories(isManualRefresh: Boolean = false) {
         if (mIsGettingDirs) {
             return
+        }
+
+        if (isManualRefresh) {
+            binding.directoriesGrid.alpha = 0f
+            binding.directoriesRefreshLayout.isRefreshing = true
         }
 
         mShouldStopFetching = true
@@ -653,7 +665,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         val getVideos = mIsPickVideoIntent || mIsGetVideoContentIntent
 
         getCachedDirectories(getVideos && !getImages, getImages && !getVideos) { dirs, noMediaFolders ->
-            gotDirectories(addTempFolderIfNeeded(dirs), noMediaFolders)
+            gotDirectories(addTempFolderIfNeeded(dirs), noMediaFolders, isManualRefresh)
         }
     }
 
@@ -1112,7 +1124,11 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         }
     }
 
-    private fun gotDirectories(newDirs: ArrayList<Directory>, precomputedNoMediaFolders: ArrayList<String>? = null) {
+    private fun gotDirectories(
+        newDirs: ArrayList<Directory>,
+        precomputedNoMediaFolders: ArrayList<String>? = null,
+        isManualRefresh: Boolean = false
+    ) {
         mIsGettingDirs = false
         mShouldStopFetching = false
 
@@ -1134,9 +1150,15 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
         val isPlaceholderVisible = AtomicBoolean(dirs.isEmpty())
 
-        runOnUiThread {
-            checkPlaceholderVisibility(dirs)
-            setupAdapter(dirs.clone() as ArrayList<Directory>)
+        // manual (pull-to-refresh) rescans skip showing the stale cached list and any
+        // intermediate progress - the grid stays hidden behind the refresh spinner
+        // (see getDirectories()) until the whole rescan below is done, then it's revealed
+        // once, already fully sorted, instead of visibly reshuffling folder by folder.
+        if (!isManualRefresh) {
+            runOnUiThread {
+                checkPlaceholderVisibility(dirs)
+                setupAdapter(dirs.clone() as ArrayList<Directory>)
+            }
         }
 
         // cached folders have been loaded, recheck folders one by one starting with the first displayed
@@ -1276,7 +1298,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                                     sortValue = getDirectorySortingValue(curMedia, path, name, size, mediaCnt)
                                 }
 
-                                requestThrottledDirsUpdate(dirs)
+                                requestThrottledDirsUpdate(dirs, suppress = isManualRefresh)
 
                                 updatedDirectories.add(directory)
                                 if (!directory.isRecycleBin() && !directory.areFavorites()) {
@@ -1319,7 +1341,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                     dirs.removeAll(dirsToRemove)
                 }
 
-                requestThrottledDirsUpdate(dirs, force = true)
+                requestThrottledDirsUpdate(dirs, force = true, suppress = isManualRefresh)
             }
         } catch (_: Exception) {
         }
@@ -1407,7 +1429,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                                 noMediaFolders = noMediaFolders
                             )
                             synchronized(dirs) { dirs.add(newDir) }
-                            requestThrottledDirsUpdate(dirs)
+                            requestThrottledDirsUpdate(dirs, suppress = isManualRefresh)
 
                             newDirsForDb.add(newDir)
                             if (folder != RECYCLE_BIN && folder != FAVORITES) {
@@ -1425,7 +1447,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 mediaDB.insertAll(newMediaForDb)
             }
 
-            requestThrottledDirsUpdate(dirs, force = true)
+            requestThrottledDirsUpdate(dirs, force = true, suppress = isManualRefresh)
         }
 
         mLoadedInitialPhotos = true
@@ -1433,8 +1455,15 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             checkLastMediaChanged(true)
         }
 
+        if (isManualRefresh) {
+            // reveal the fully rescanned + sorted list in one shot, instead of the
+            // folder-by-folder reshuffling that progressive updates would show
+            setupAdapter(dirs)
+        }
+
         runOnUiThread {
             binding.directoriesRefreshLayout.isRefreshing = false
+            binding.directoriesGrid.alpha = 1f
             checkPlaceholderVisibility(dirs)
         }
 
@@ -1485,6 +1514,21 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
         Intent(this, MediaActivity::class.java).apply {
             putExtra(DIRECTORY, config.defaultFolder)
+            handleMediaIntent(this)
+        }
+    }
+
+    private fun openLastWarmSessionFolder() {
+        val path = LastFolderSession.path ?: return
+        if (path != RECYCLE_BIN && path != FAVORITES) {
+            val dir = File(path)
+            if (!dir.exists() || !dir.isDirectory) {
+                return
+            }
+        }
+
+        Intent(this, MediaActivity::class.java).apply {
+            putExtra(DIRECTORY, path)
             handleMediaIntent(this)
         }
     }
