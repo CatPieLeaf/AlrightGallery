@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.goodwy.gallery.helpers.RECYCLE_BIN
 import com.goodwy.gallery.models.Directory
 
@@ -26,6 +27,14 @@ interface DirectoryDao {
 
     @Query("UPDATE OR REPLACE directories SET thumbnail = :thumbnail, media_count = :mediaCnt, last_modified = :lastModified, date_taken = :dateTaken, size = :size, media_types = :mediaTypes, sort_value = :sortValue WHERE path = :path COLLATE NOCASE")
     fun updateDirectory(path: String, thumbnail: String, mediaCnt: Int, lastModified: Long, dateTaken: Long, size: Long, mediaTypes: Int, sortValue: String)
+
+    // Runs all the per-directory updates in a single transaction instead of one commit per directory
+    @Transaction
+    fun updateDirectories(directories: List<Directory>) {
+        directories.forEach {
+            updateDirectory(it.path, it.tmb, it.mediaCnt, it.modified, it.taken, it.size, it.types, it.sortValue)
+        }
+    }
 
     @Query("UPDATE directories SET thumbnail = :thumbnail, filename = :name, path = :newPath WHERE path = :oldPath COLLATE NOCASE")
     fun updateDirectoryAfterRename(thumbnail: String, name: String, newPath: String, oldPath: String)

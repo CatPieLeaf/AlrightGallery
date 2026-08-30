@@ -15,6 +15,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -797,9 +798,11 @@ class DirectoryAdapter(
         val directories = newDirs.clone() as ArrayList<Directory>
         if (directories.hashCode() != currentDirectoriesHash) {
             currentDirectoriesHash = directories.hashCode()
+            val oldDirs = dirs
             dirs = directories
             fillLockedFolders()
-            notifyDataSetChanged()
+            val diffResult = DiffUtil.calculateDiff(DirectoryDiffCallback(oldDirs, directories))
+            diffResult.dispatchUpdatesTo(this)
             clearPrefetchRequests()
             prefetchDirectoryThumbnails()
         }
@@ -807,6 +810,20 @@ class DirectoryAdapter(
         newDirs.forEachIndexed { index, item ->
             keyToPositionCache[item.path.hashCode()] = index
         }
+    }
+
+    private class DirectoryDiffCallback(
+        private val oldList: List<Directory>,
+        private val newList: List<Directory>
+    ) : DiffUtil.Callback() {
+        override fun getOldListSize() = oldList.size
+        override fun getNewListSize() = newList.size
+
+        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+            oldList[oldItemPosition].path.equals(newList[newItemPosition].path, true)
+
+        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+            oldList[oldItemPosition] == newList[newItemPosition]
     }
 
     fun updateAnimateGifs(animateGifs: Boolean) {

@@ -1085,7 +1085,7 @@ fun Context.getCachedDirectories(
     getImagesOnly: Boolean = false,
     forceShowHidden: Boolean = false,
     forceShowExcluded: Boolean = false,
-    callback: (ArrayList<Directory>) -> Unit,
+    callback: (dirs: ArrayList<Directory>, noMediaFolders: ArrayList<String>) -> Unit,
 ) {
     ensureBackgroundThread {
         try {
@@ -1165,7 +1165,7 @@ fun Context.getCachedDirectories(
         }
 
         val clone = filteredDirectories.clone() as ArrayList<Directory>
-        callback(clone.distinctBy { it.path.getDistinctPath() } as ArrayList<Directory>)
+        callback(clone.distinctBy { it.path.getDistinctPath() } as ArrayList<Directory>, noMediaFolders)
         removeInvalidDBDirectories(filteredDirectories)
     }
 }
