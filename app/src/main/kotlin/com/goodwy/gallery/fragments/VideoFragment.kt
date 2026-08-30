@@ -418,9 +418,12 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
 
     override fun onDestroy() {
         super.onDestroy()
-        if (activity?.isChangingConfigurations == false) {
-            cleanup()
-        }
+        // see the matching comment in VideoPlayerActivity.onDestroy(): the host activities
+        // (ViewPagerActivity/PhotoVideoActivity) already declare
+        // configChanges="orientation|keyboardHidden|screenSize", so they're never destroyed
+        // for those changes - skipping cleanup here on isChangingConfigurations just leaked
+        // the player for any other config change that does destroy them (theme, density, ...)
+        cleanup()
 
         if (::mVolumeSideScroll.isInitialized) {
             mVolumeSideScroll.cleanup()

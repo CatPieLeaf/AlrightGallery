@@ -157,15 +157,21 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
 
     override fun onDestroy() {
         super.onDestroy()
-        if (!isChangingConfigurations) {
-            pauseVideo()
-            binding.bottomVideoTimeHolder.videoCurrTime.text = 0.getFormattedDuration()
-            releaseExoPlayer()
-            binding.bottomVideoTimeHolder.videoSeekbar.progress = 0
-            mTimerHandler.removeCallbacksAndMessages(null)
-            mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
-            mVolumeController?.destroy()
-        }
+        // NOTE: this used to be skipped when isChangingConfigurations is true, on the
+        // assumption that meant a rotation was about to recreate the activity. But this
+        // activity's manifest entry already declares
+        // android:configChanges="orientation|keyboardHidden|screenSize", so the activity
+        // is never actually destroyed for those - onDestroy() only runs for some OTHER
+        // config change (theme, density, locale, ...), where the activity really is being
+        // torn down and a fresh instance created, so skipping cleanup here just leaked the
+        // player/native codec resources instead of preserving anything.
+        pauseVideo()
+        binding.bottomVideoTimeHolder.videoCurrTime.text = 0.getFormattedDuration()
+        releaseExoPlayer()
+        binding.bottomVideoTimeHolder.videoSeekbar.progress = 0
+        mTimerHandler.removeCallbacksAndMessages(null)
+        mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+        mVolumeController?.destroy()
     }
 
     private fun setupOptionsMenu() {
