@@ -948,7 +948,7 @@ fun Activity.getShortcutImage(tmb: String, drawable: Drawable, callback: () -> U
             .fitCenter()
 
         val size = resources.getDimension(com.goodwy.commons.R.dimen.shortcut_size).toInt()
-        val builder = Glide.with(this)
+        val builder = Glide.with(applicationContext)
             .asDrawable()
             .load(tmb)
             .apply(options)
@@ -959,6 +959,8 @@ fun Activity.getShortcutImage(tmb: String, drawable: Drawable, callback: () -> U
             (drawable as LayerDrawable).setDrawableByLayerId(R.id.shortcut_image, builder.get())
         } catch (e: Exception) {
         }
+
+        if (isDestroyed || isFinishing) return@ensureBackgroundThread
 
         runOnUiThread {
             callback()

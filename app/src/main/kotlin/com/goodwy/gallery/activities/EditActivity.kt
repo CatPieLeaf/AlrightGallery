@@ -764,7 +764,7 @@ class EditActivity : BaseCropActivity(), CanvasListener {
                     val thumbnailSize = resources.getDimension(R.dimen.bottom_filters_thumbnail_size).toInt()
 
                     val bitmap = try {
-                        Glide.with(this)
+                        Glide.with(applicationContext)
                             .asBitmap()
                             .load(uri)
                             .listener(object : RequestListener<Bitmap> {
@@ -786,13 +786,14 @@ class EditActivity : BaseCropActivity(), CanvasListener {
                     } catch (e: Exception) {
                         // Если не удалось загрузить уменьшенное изображение, попробуем загрузить оригинальное
                         try {
-                            Glide.with(this)
+                            Glide.with(applicationContext)
                                 .asBitmap()
                                 .load(uri)
                                 .submit()
                                 .get()
                                 .scale(thumbnailSize, thumbnailSize, true)
                         } catch (e2: Exception) {
+                            if (isDestroyed || isFinishing) return@ensureBackgroundThread
                             runOnUiThread {
                                 showErrorToast(getString(R.string.failed_to_load_image_for_filters))
                                 currPrimaryAction = PRIMARY_ACTION_NONE
@@ -801,6 +802,8 @@ class EditActivity : BaseCropActivity(), CanvasListener {
                             return@ensureBackgroundThread
                         }
                     }
+
+                    if (isDestroyed || isFinishing) return@ensureBackgroundThread
 
                     // Проверяем, что bitmap валиден
                     if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) {
@@ -816,6 +819,7 @@ class EditActivity : BaseCropActivity(), CanvasListener {
                         setupFiltersAdapter(bitmap)
                     }
                 } catch (e: Exception) {
+                    if (isDestroyed || isFinishing) return@ensureBackgroundThread
                     runOnUiThread {
                         showErrorToast("${getString(R.string.failed_to_load_filters)}: ${e.message}")
                         currPrimaryAction = PRIMARY_ACTION_NONE
