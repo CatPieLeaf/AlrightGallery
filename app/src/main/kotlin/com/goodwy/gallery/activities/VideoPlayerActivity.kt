@@ -28,6 +28,7 @@ import android.view.WindowManager
 import android.widget.RelativeLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.AudioAttributes
@@ -659,6 +660,21 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     }
 
     override fun updatePlaybackSpeed(speed: Float) {
+        val isSlow = speed < 1f
+        if (isSlow != binding.bottomVideoTimeHolder.videoPlaybackSpeed.tag as? Boolean) {
+            binding.bottomVideoTimeHolder.videoPlaybackSpeed.tag = isSlow
+
+            val drawableId =
+                if (isSlow) R.drawable.ic_playback_speed_slow_vector else R.drawable.ic_playback_speed_vector
+            binding.bottomVideoTimeHolder.videoPlaybackSpeed
+                .setDrawablesRelativeWithIntrinsicBounds(
+                    AppCompatResources.getDrawable(
+                        this,
+                        drawableId
+                    )
+                )
+        }
+
         @SuppressLint("SetTextI18n")
         binding.bottomVideoTimeHolder.videoPlaybackSpeed.text =
             "${DecimalFormat("#.##").format(speed)}x"
