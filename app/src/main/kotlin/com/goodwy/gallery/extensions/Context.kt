@@ -1337,6 +1337,23 @@ fun Context.updateFavorite(path: String, isFavorite: Boolean) {
     }
 }
 
+// batches N single-row favorite writes into one transaction each, instead of one commit per path
+fun Context.updateFavorites(paths: Collection<String>, isFavorite: Boolean) {
+    if (paths.isEmpty()) {
+        return
+    }
+
+    try {
+        if (isFavorite) {
+            favoritesDB.insertAll(paths.map { getFavoriteFromPath(it) })
+        } else {
+            favoritesDB.deleteFavoritePaths(paths.toList())
+        }
+    } catch (e: Exception) {
+        toast(com.goodwy.commons.R.string.unknown_error_occurred)
+    }
+}
+
 // remove the "recycle_bin" from the file path prefix, replace it with real bin path /data/user...
 fun Context.getUpdatedDeletedMedia(): ArrayList<Medium> {
     val media = try {

@@ -296,6 +296,8 @@ class MediaFetcher(val context: Context) {
         } else {
             ArrayList()
         }
+        val deletedMediaByPath = if (isRecycleBin) deletedMedia.associateBy { it.path } else emptyMap()
+        val favoritePathsSet = favoritePaths.toHashSet()
 
         val config = context.config
         val checkProperFileSize = getProperFileSize || config.fileLoadingPriority == PRIORITY_COMPROMISE
@@ -377,7 +379,7 @@ class MediaFetcher(val context: Context) {
             }
 
             if (isRecycleBin) {
-                deletedMedia.firstOrNull { it.path == path }?.apply {
+                deletedMediaByPath[path]?.apply {
                     media.add(this)
                 }
             } else {
@@ -416,7 +418,7 @@ class MediaFetcher(val context: Context) {
                     else -> TYPE_IMAGES
                 }
 
-                val isFavorite = favoritePaths.contains(path)
+                val isFavorite = favoritePathsSet.contains(path)
                 val medium = Medium(null, filename, path, file.parent ?: "", lastModified, dateTaken, size, type, videoDuration, isFavorite, 0L, 0L)
                 media.add(medium)
             }
@@ -440,6 +442,7 @@ class MediaFetcher(val context: Context) {
 
         val filterMedia = context.config.filterMedia
         val showHidden = context.config.shouldShowHidden
+        val favoritePathsSet = favoritePaths.toHashSet()
 
         val projection = arrayOf(
             Images.Media._ID,
@@ -462,7 +465,7 @@ class MediaFetcher(val context: Context) {
                 val mediaStoreId = cursor.getLongValue(Images.Media._ID)
                 val filename = cursor.getStringValue(Images.Media.DISPLAY_NAME)
                 val path = cursor.getStringValue(Images.Media.DATA)
-                if (getFavoritePathsOnly && !favoritePaths.contains(path)) {
+                if (getFavoritePathsOnly && !favoritePathsSet.contains(path)) {
                     return@queryCursor
                 }
 
@@ -521,7 +524,7 @@ class MediaFetcher(val context: Context) {
                 }
 
                 val videoDuration = (cursor.getIntValue(MediaStore.MediaColumns.DURATION) / 1000.toDouble()).roundToInt()
-                val isFavorite = favoritePaths.contains(path)
+                val isFavorite = favoritePathsSet.contains(path)
                 val medium =
                     Medium(null, filename, path, path.getParentPath(), lastModified, dateTaken, size, type, videoDuration, isFavorite, 0L, mediaStoreId)
                 val parent = medium.parentPath.lowercase(Locale.getDefault())
@@ -547,6 +550,7 @@ class MediaFetcher(val context: Context) {
         val checkFileExistence = context.config.fileLoadingPriority == PRIORITY_VALIDITY
         val showHidden = context.config.shouldShowHidden
         val OTGPath = context.config.OTGPath
+        val favoritePathsSet = favoritePaths.toHashSet()
 
         for (file in files) {
             if (shouldStop) {
@@ -600,7 +604,7 @@ class MediaFetcher(val context: Context) {
                 file.uri.toString().replaceFirst("${context.config.OTGTreeUri}/document/${context.config.OTGPartition}%3A", "${context.config.OTGPath}/")
             )
             val videoDuration = if (getVideoDurations) context.getDuration(path) ?: 0 else 0
-            val isFavorite = favoritePaths.contains(path)
+            val isFavorite = favoritePathsSet.contains(path)
             val medium = Medium(null, filename, path, folder, dateModified, dateTaken, size, type, videoDuration, isFavorite, 0L, 0L)
             media.add(medium)
         }

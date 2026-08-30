@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -354,10 +355,9 @@ class MediaAdapter(
 
     private fun toggleFavorites(add: Boolean) {
         ensureBackgroundThread {
-            getSelectedItems().forEach {
-                it.isFavorite = add
-                activity.updateFavorite(it.path, add)
-            }
+            val selectedItems = getSelectedItems()
+            selectedItems.forEach { it.isFavorite = add }
+            activity.updateFavorites(selectedItems.map { it.path }, add)
             activity.runOnUiThread {
                 listener?.refreshItems()
                 finishActMode()
@@ -609,14 +609,15 @@ class MediaAdapter(
             .firstOrNull { it.path == path }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     fun updateMedia(newMedia: ArrayList<ThumbnailItem>) {
         val thumbnailItems = newMedia.clone() as ArrayList<ThumbnailItem>
         clearPrefetchRequests()
         if (thumbnailItems.hashCode() != currentMediaHash) {
             currentMediaHash = thumbnailItems.hashCode()
+            val oldMedia = media
             media = thumbnailItems
-            notifyDataSetChanged()
+            val diffResult = DiffUtil.calculateDiff(MediaDiffCallback(oldMedia, thumbnailItems))
+            diffResult.dispatchUpdatesTo(this)
         }
         rebuildSelectionKeyCache()
         keyToPositionCache.clear()
@@ -626,6 +627,27 @@ class MediaAdapter(
             }
         }
         prefetchVisibleRangeThumbnails()
+    }
+
+    private class MediaDiffCallback(
+        private val oldList: List<ThumbnailItem>,
+        private val newList: List<ThumbnailItem>
+    ) : DiffUtil.Callback() {
+        override fun getOldListSize() = oldList.size
+        override fun getNewListSize() = newList.size
+
+        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+            val old = oldList[oldItemPosition]
+            val new = newList[newItemPosition]
+            return when {
+                old is Medium && new is Medium -> old.path == new.path
+                old is ThumbnailSection && new is ThumbnailSection -> old.title == new.title
+                else -> false
+            }
+        }
+
+        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+            oldList[oldItemPosition] == newList[newItemPosition]
     }
 
     @SuppressLint("NotifyDataSetChanged")
