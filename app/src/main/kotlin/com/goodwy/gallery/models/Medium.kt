@@ -12,7 +12,16 @@ import java.io.Serializable
 import java.util.Calendar
 import java.util.Locale
 
-@Entity(tableName = "media", indices = [(Index(value = ["full_path"], unique = true))])
+@Entity(
+    tableName = "media",
+    indices = [
+        Index(value = ["full_path"], unique = true),
+        // name must match the raw-SQL index created in GalleryDatabase's migration/callback
+        // (CREATE INDEX ... parent_path COLLATE NOCASE) - Room's schema validation only checks
+        // name/columns/uniqueness here, not the collation used when the index was created
+        Index(value = ["parent_path"], name = "idx_media_parent_path_nocase")
+    ]
+)
 data class Medium(
     @PrimaryKey(autoGenerate = true) var id: Long?,
     @ColumnInfo(name = "filename") var name: String,
