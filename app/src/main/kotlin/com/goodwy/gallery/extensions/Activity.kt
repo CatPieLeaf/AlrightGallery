@@ -610,6 +610,10 @@ fun AppCompatActivity.fixDateTaken(
         ensureBackgroundThread {
             val dateTakens = ArrayList<DateTaken>()
             val processedPaths = ArrayList<String>()
+            // Only a handful of distinct formats are possible here (separator is '-' or ':',
+            // the "T" marker is present or not), so cache the formatter per format string
+            // instead of constructing a new SimpleDateFormat for every file in the batch.
+            val formattersByPattern = HashMap<String, SimpleDateFormat>()
 
             for (path in paths) {
                 try {
@@ -622,7 +626,7 @@ fun AppCompatActivity.fixDateTaken(
                     val t = if (dateTime.substring(10, 11) == "T") "\'T\'" else " "
                     val separator = dateTime.substring(4, 5)
                     val format = "yyyy${separator}MM${separator}dd${t}kk:mm:ss"
-                    val formatter = SimpleDateFormat(format, Locale.getDefault())
+                    val formatter = formattersByPattern.getOrPut(format) { SimpleDateFormat(format, Locale.getDefault()) }
                     val timestamp = formatter.parse(dateTime).time
 
                     val uri = getFileUri(path)
