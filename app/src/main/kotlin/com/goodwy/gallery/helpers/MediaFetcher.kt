@@ -19,6 +19,7 @@ import com.goodwy.gallery.models.ThumbnailItem
 import com.goodwy.gallery.models.ThumbnailSection
 import java.io.File
 import java.util.Calendar
+import java.util.IdentityHashMap
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -44,13 +45,13 @@ class MediaFetcher(val context: Context) {
             }
         } else {
             if (curPath != FAVORITES && curPath != RECYCLE_BIN && isRPlus() && !isExternalStorageManager()) {
-                if (android11Files?.containsKey(curPath.lowercase(Locale.getDefault())) == true) {
-                    curMedia.addAll(android11Files[curPath.lowercase(Locale.getDefault())]!!)
+                val lowerCasePath = curPath.lowercase(Locale.getDefault())
+                val existingMatch = android11Files?.get(lowerCasePath)
+                if (existingMatch != null) {
+                    curMedia.addAll(existingMatch)
                 } else if (android11Files == null) {
                     val files = getAndroid11FolderMedia(isPickImage, isPickVideo, favoritePaths, false, getProperDateTaken, dateTakens)
-                    if (files.containsKey(curPath.lowercase(Locale.getDefault()))) {
-                        curMedia.addAll(files[curPath.lowercase(Locale.getDefault())]!!)
-                    }
+                    files[lowerCasePath]?.let { curMedia.addAll(it) }
                 }
             }
 
@@ -528,12 +529,7 @@ class MediaFetcher(val context: Context) {
                 val medium =
                     Medium(null, filename, path, path.getParentPath(), lastModified, dateTaken, size, type, videoDuration, isFavorite, 0L, mediaStoreId)
                 val parent = medium.parentPath.lowercase(Locale.getDefault())
-                val currentFolderMedia = media[parent]
-                if (currentFolderMedia == null) {
-                    media[parent] = ArrayList<Medium>()
-                }
-
-                media[parent]?.add(medium)
+                media.getOrPut(parent) { ArrayList() }.add(medium)
             } catch (_: Exception) {
             }
         }
@@ -771,24 +767,43 @@ class MediaFetcher(val context: Context) {
             return
         }
 
+        // Precompute the lowercase(/normalized) sort key once per item, and reuse a single
+        // AlphanumericComparator, instead of redoing that work (Unicode normalization included)
+        // on every pairwise comparison during the sort - an O(n log n) sort otherwise redoes an
+        // O(n)-able computation that many times over.
+        val useNumericValue = sorting and SORT_USE_NUMERIC_VALUE != 0
+        val alphanumericComparator = if (useNumericValue) AlphanumericComparator() else null
+
+        val nameKeys: IdentityHashMap<Medium, String>? = if (sorting and SORT_BY_NAME != 0) {
+            IdentityHashMap<Medium, String>(media.size).apply {
+                media.forEach { put(it, it.name.normalizeString().lowercase(Locale.getDefault())) }
+            }
+        } else {
+            null
+        }
+
+        val pathKeys: IdentityHashMap<Medium, String>? = if (sorting and SORT_BY_PATH != 0) {
+            IdentityHashMap<Medium, String>(media.size).apply {
+                media.forEach { put(it, it.path.lowercase(Locale.getDefault())) }
+            }
+        } else {
+            null
+        }
+
         media.sortWith { o1, o2 ->
             o1 as Medium
             o2 as Medium
             var result = when {
                 sorting and SORT_BY_NAME != 0 -> {
-                    if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                        AlphanumericComparator().compare(o1.name.normalizeString().lowercase(Locale.getDefault()), o2.name.normalizeString().lowercase(Locale.getDefault()))
-                    } else {
-                        o1.name.normalizeString().lowercase(Locale.getDefault()).compareTo(o2.name.normalizeString().lowercase(Locale.getDefault()))
-                    }
+                    val name1 = nameKeys!!.getValue(o1)
+                    val name2 = nameKeys.getValue(o2)
+                    alphanumericComparator?.compare(name1, name2) ?: name1.compareTo(name2)
                 }
 
                 sorting and SORT_BY_PATH != 0 -> {
-                    if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                        AlphanumericComparator().compare(o1.path.lowercase(Locale.getDefault()), o2.path.lowercase(Locale.getDefault()))
-                    } else {
-                        o1.path.lowercase(Locale.getDefault()).compareTo(o2.path.lowercase(Locale.getDefault()))
-                    }
+                    val path1 = pathKeys!!.getValue(o1)
+                    val path2 = pathKeys.getValue(o2)
+                    alphanumericComparator?.compare(path1, path2) ?: path1.compareTo(path2)
                 }
 
                 sorting and SORT_BY_SIZE != 0 -> o1.size.compareTo(o2.size)
@@ -820,10 +835,7 @@ class MediaFetcher(val context: Context) {
         val mediumGroups = LinkedHashMap<String, ArrayList<Medium>>()
         media.forEach {
             val key = it.getGroupingKey(currentGrouping)
-            if (!mediumGroups.containsKey(key)) {
-                mediumGroups[key] = ArrayList()
-            }
-            mediumGroups[key]!!.add(it)
+            mediumGroups.getOrPut(key) { ArrayList() }.add(it)
         }
 
         val sortDescending = currentGrouping and GROUP_DESCENDING != 0
