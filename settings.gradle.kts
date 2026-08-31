@@ -19,6 +19,7 @@ dependencyResolutionManagement {
 rootProject.name = "Gallery"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 include(":app")
+include(":baselineprofile")
 
 // TEMP: build against a local Goodwy Commons checkout (with a targeted cold-start fix)
 // instead of the pinned jitpack artifact, since that fix lives in the commons lib, not here.

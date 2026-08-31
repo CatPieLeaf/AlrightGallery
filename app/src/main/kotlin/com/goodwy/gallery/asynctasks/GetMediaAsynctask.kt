@@ -1,13 +1,12 @@
 package com.goodwy.gallery.asynctasks
 
 import android.content.Context
-import android.os.AsyncTask
+import android.os.Environment
 import android.util.Log
 import com.goodwy.commons.helpers.FAVORITES
 import com.goodwy.commons.helpers.SORT_BY_DATE_MODIFIED
 import com.goodwy.commons.helpers.SORT_BY_DATE_TAKEN
 import com.goodwy.commons.helpers.SORT_BY_SIZE
-import android.os.Environment
 import com.goodwy.commons.helpers.isRPlus
 import com.goodwy.gallery.extensions.config
 import com.goodwy.gallery.extensions.getFavoritePaths
@@ -19,15 +18,24 @@ import kotlinx.coroutines.*
 class GetMediaAsynctask(
     val context: Context, val mPath: String, val isPickImage: Boolean = false, val isPickVideo: Boolean = false,
     val showAll: Boolean, val callback: (media: ArrayList<ThumbnailItem>) -> Unit
-) :
-    AsyncTask<Void, Void, ArrayList<ThumbnailItem>>() {
+) {
     companion object {
         private const val TAG = "GetMediaAsynctask"
     }
 
     private val mediaFetcher = MediaFetcher(context)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun doInBackground(vararg params: Void): ArrayList<ThumbnailItem> {
+    fun execute() {
+        scope.launch {
+            val media = fetchMedia()
+            withContext(Dispatchers.Main) {
+                callback(media)
+            }
+        }
+    }
+
+    private suspend fun fetchMedia(): ArrayList<ThumbnailItem> {
         val pathToUse = if (showAll) SHOW_ALL else mPath
         val folderGrouping = context.config.getFolderGrouping(pathToUse)
         val folderSorting = context.config.getFolderSorting(pathToUse)
@@ -71,7 +79,7 @@ class GetMediaAsynctask(
 
             val allMedia = ArrayList<Medium>()
             val lock = Any()
-            runBlocking(Dispatchers.IO) {
+            coroutineScope {
                 foldersToScan.map { folderPath ->
                     async {
                         if (mediaFetcher.shouldStop) return@async
@@ -97,13 +105,8 @@ class GetMediaAsynctask(
         return mediaFetcher.groupMedia(media, pathToUse)
     }
 
-    override fun onPostExecute(media: ArrayList<ThumbnailItem>) {
-        super.onPostExecute(media)
-        callback(media)
-    }
-
     fun stopFetching() {
         mediaFetcher.shouldStop = true
-        cancel(true)
+        scope.cancel()
     }
 }
