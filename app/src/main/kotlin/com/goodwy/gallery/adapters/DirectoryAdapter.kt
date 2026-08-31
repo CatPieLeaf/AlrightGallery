@@ -22,6 +22,13 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.Target
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.google.gson.Gson
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import com.goodwy.commons.activities.BaseSimpleActivity
@@ -65,6 +72,8 @@ class DirectoryAdapter(
 
     private val config = activity.config
     private val isListViewType = config.viewTypeFolders == VIEW_TYPE_LIST
+    private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var updateDirsJob: Job? = null
     private var pinnedFolders = config.pinnedFolders
     private var scrollHorizontally = config.scrollHorizontally
     private var animateGifs = config.animateGifs
@@ -796,19 +805,30 @@ class DirectoryAdapter(
 
     fun updateDirs(newDirs: ArrayList<Directory>) {
         val directories = newDirs.clone() as ArrayList<Directory>
-        if (directories.hashCode() != currentDirectoriesHash) {
-            currentDirectoriesHash = directories.hashCode()
-            val oldDirs = dirs
-            dirs = directories
-            fillLockedFolders()
-            val diffResult = DiffUtil.calculateDiff(DirectoryDiffCallback(oldDirs, directories))
-            diffResult.dispatchUpdatesTo(this)
-            clearPrefetchRequests()
-            prefetchDirectoryThumbnails()
-        }
-        keyToPositionCache.clear()
-        newDirs.forEachIndexed { index, item ->
-            keyToPositionCache[item.path.hashCode()] = index
+
+        // hashCode() over the whole list and DiffUtil.calculateDiff() are both CPU work;
+        // run them off the main thread and only touch adapter state once back on it, same
+        // as MediaAdapter.updateMedia(). Cancel any in-flight update first so a fast-changing
+        // folder list never applies a diff computed against an already-stale oldDirs snapshot.
+        updateDirsJob?.cancel()
+        updateDirsJob = adapterScope.launch {
+            val newHash = withContext(Dispatchers.Default) { directories.hashCode() }
+            if (newHash != currentDirectoriesHash) {
+                currentDirectoriesHash = newHash
+                val oldDirs = dirs
+                dirs = directories
+                fillLockedFolders()
+                val diffResult = withContext(Dispatchers.Default) {
+                    DiffUtil.calculateDiff(DirectoryDiffCallback(oldDirs, directories))
+                }
+                diffResult.dispatchUpdatesTo(this@DirectoryAdapter)
+                clearPrefetchRequests()
+                prefetchDirectoryThumbnails()
+            }
+            keyToPositionCache.clear()
+            newDirs.forEachIndexed { index, item ->
+                keyToPositionCache[item.path.hashCode()] = index
+            }
         }
     }
 
@@ -1003,6 +1023,7 @@ class DirectoryAdapter(
 
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
         super.onDetachedFromRecyclerView(recyclerView)
+        adapterScope.cancel()
         clearPrefetchRequests()
         directoryRecyclerView = null
     }

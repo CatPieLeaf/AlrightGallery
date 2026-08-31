@@ -20,6 +20,13 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.Target
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import com.goodwy.commons.activities.BaseSimpleActivity
 import com.goodwy.commons.adapters.MyRecyclerViewAdapter
@@ -79,6 +86,8 @@ class MediaAdapter(
 
     private val keyToPositionCache = mutableMapOf<Int, Int>()
     private val preloadTargets = mutableListOf<Target<*>>()
+    private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var updateMediaJob: Job? = null
 
     private val highPriorityLookAheadItems = 12
     private val prefetchItemBudget = 48
@@ -242,6 +251,7 @@ class MediaAdapter(
         super.onDetachedFromRecyclerView(recyclerView)
         prefetchHandler.removeCallbacksAndMessages(null)
         recyclerView.removeOnScrollListener(prefetchOnScrollListener)
+        adapterScope.cancel()
         clearPrefetchRequests()
     }
 
@@ -627,21 +637,34 @@ class MediaAdapter(
     fun updateMedia(newMedia: ArrayList<ThumbnailItem>) {
         val thumbnailItems = newMedia.clone() as ArrayList<ThumbnailItem>
         clearPrefetchRequests()
-        if (thumbnailItems.hashCode() != currentMediaHash) {
-            currentMediaHash = thumbnailItems.hashCode()
-            val oldMedia = media
-            media = thumbnailItems
-            val diffResult = DiffUtil.calculateDiff(MediaDiffCallback(oldMedia, thumbnailItems))
-            diffResult.dispatchUpdatesTo(this)
-        }
-        rebuildSelectionKeyCache()
-        keyToPositionCache.clear()
-        newMedia.forEachIndexed { index, item ->
-            if (item is Medium) {
-                keyToPositionCache[getOrCreateSelectionKey(item.path)] = index
+
+        // hashCode() over the whole list and DiffUtil.calculateDiff() are both O(n)-or-worse
+        // CPU work; for large libraries that's enough to drop frames if run inline on the main
+        // thread, so compute them on a background dispatcher and only touch adapter state
+        // (and dispatch RecyclerView updates) once back on the main thread. Cancel any
+        // in-flight update first so a fast-changing folder never applies a diff computed
+        // against an oldMedia snapshot that's already stale by the time it finishes.
+        updateMediaJob?.cancel()
+        updateMediaJob = adapterScope.launch {
+            val newHash = withContext(Dispatchers.Default) { thumbnailItems.hashCode() }
+            if (newHash != currentMediaHash) {
+                val oldMedia = media
+                val diffResult = withContext(Dispatchers.Default) {
+                    DiffUtil.calculateDiff(MediaDiffCallback(oldMedia, thumbnailItems))
+                }
+                currentMediaHash = newHash
+                media = thumbnailItems
+                diffResult.dispatchUpdatesTo(this@MediaAdapter)
             }
+            rebuildSelectionKeyCache()
+            keyToPositionCache.clear()
+            newMedia.forEachIndexed { index, item ->
+                if (item is Medium) {
+                    keyToPositionCache[getOrCreateSelectionKey(item.path)] = index
+                }
+            }
+            prefetchVisibleRangeThumbnails()
         }
-        prefetchVisibleRangeThumbnails()
     }
 
     private class MediaDiffCallback(
