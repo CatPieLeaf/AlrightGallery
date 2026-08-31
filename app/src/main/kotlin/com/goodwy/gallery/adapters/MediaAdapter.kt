@@ -6,6 +6,8 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.Color
 import android.graphics.drawable.Icon
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
@@ -81,6 +83,7 @@ class MediaAdapter(
     private val highPriorityLookAheadItems = 12
     private val prefetchItemBudget = 48
     private val prefetchSizeBudgetBytes = 24L * 1024L * 1024L
+    private val prefetchDebounceMs = 100L
     private var cachedThumbnailSize = 0
     private val selectionKeyByPath = mutableMapOf<String, Int>()
     private val pathBySelectionKey = mutableMapOf<Int, String>()
@@ -226,13 +229,25 @@ class MediaAdapter(
         }
     }
 
+    private val prefetchHandler = Handler(Looper.getMainLooper())
+    private val prefetchOnScrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            super.onScrolled(recyclerView, dx, dy)
+            prefetchHandler.removeCallbacksAndMessages(null)
+            prefetchHandler.postDelayed({ prefetchVisibleRangeThumbnails() }, prefetchDebounceMs)
+        }
+    }
+
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
         super.onDetachedFromRecyclerView(recyclerView)
+        prefetchHandler.removeCallbacksAndMessages(null)
+        recyclerView.removeOnScrollListener(prefetchOnScrollListener)
         clearPrefetchRequests()
     }
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         super.onAttachedToRecyclerView(recyclerView)
+        recyclerView.addOnScrollListener(prefetchOnScrollListener)
         prefetchVisibleRangeThumbnails()
     }
 
