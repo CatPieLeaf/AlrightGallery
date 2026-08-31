@@ -17,7 +17,7 @@ exif = "1.0.1"
 #Room
 room = "2.8.4"
 #Goodwy
-right-commons = "3e4d22538b"
+right-commons = "d52444f7a0"
 behavioRule = "1.0.1"
 rxAnimation = "2.1.1"
 #Gradle
@@ -67,9 +67,9 @@ androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref =
 #Compose
 compose-detekt = { module = "io.nlopez.compose.rules:detekt", version.ref = "detektCompose" }
 #Goodwy
-goodwy-commons-gplay = { module = "com.github.goodwy.goodwy-commons:commons-gplay", version.ref = "right-commons" }
-goodwy-commons-foss = { module = "com.github.goodwy.goodwy-commons:commons-foss", version.ref = "right-commons" }
-goodwy-commons-rustore = { module = "com.github.goodwy.goodwy-commons:commons-rustore", version.ref = "right-commons" }
+goodwy-commons-gplay = { module = "com.github.catpieleaf.goodwy-commons:commons-gplay", version.ref = "right-commons" }
+goodwy-commons-foss = { module = "com.github.catpieleaf.goodwy-commons:commons-foss", version.ref = "right-commons" }
+goodwy-commons-rustore = { module = "com.github.catpieleaf.goodwy-commons:commons-rustore", version.ref = "right-commons" }
 behavio-rule = { module = "com.github.Liverm0r:BehavioRule", version.ref = "behavioRule" }
 rx-animation = { module = "com.mikhaellopez:rxanimation", version.ref = "rxAnimation" }
 #Other
