@@ -576,6 +576,14 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                 binding.mediaGrid.scheduleLayoutAnimation()
             }
 
+            // Grid item size doesn't depend on adapter content, so RecyclerView can skip a
+            // layout pass on adapter changes; a larger offscreen view cache avoids rebinding
+            // thumbnails on quick scroll-direction reversals; and change animations aren't
+            // needed for selection/toggle updates, so skip the extra invalidate/animate work.
+            binding.mediaGrid.setHasFixedSize(true)
+            binding.mediaGrid.setItemViewCacheSize(12)
+            (binding.mediaGrid.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
+
             setupLayoutManager()
             handleGridSpacing()
         } else if (mLastSearchedText.isEmpty()) {
@@ -941,7 +949,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                     1
                 }
             }
-        }
+        }.apply { isSpanIndexCacheEnabled = true }
     }
 
     private fun setupListLayoutManager() {

@@ -1621,6 +1621,9 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 setupZoomListener(mZoomListener)
                 runOnUiThread {
                     binding.directoriesGrid.adapter = this
+                    binding.directoriesGrid.setHasFixedSize(true)
+                    binding.directoriesGrid.setItemViewCacheSize(12)
+                    (binding.directoriesGrid.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
                     setupScrollDirection()
 
                     if (config.viewTypeFolders == VIEW_TYPE_LIST && areSystemAnimationsEnabled) {
