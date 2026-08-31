@@ -351,8 +351,12 @@ fun Context.fillWithSharedDirectParents(dirs: ArrayList<Directory>): ArrayList<D
         }
     }
 
+    // Case-insensitive path lookup set, checked once per childCounts entry below instead of
+    // linearly scanning all of `dirs` (dirs.none { ... }) for every entry.
+    val dirPathsLower = dirs.mapTo(HashSet()) { it.path.lowercase(Locale.getDefault()) }
+
     childCounts
-        .filter { dir -> dir.value > 1 && dirs.none { it.path.equals(dir.key, true) } }
+        .filter { dir -> dir.value > 1 && !dirPathsLower.contains(dir.key.lowercase(Locale.getDefault())) }
         .toList()
         .sortedByDescending { it.first.length }
         .forEach { (parent, _) ->
@@ -369,6 +373,12 @@ fun Context.getDirectParentSubfolders(
     val currentPaths = LinkedHashSet<String>()
     val foldersWithoutMediaFiles = ArrayList<String>()
 
+    // File(x).parent is pure string parsing (no I/O), but this function calls it on the same
+    // path repeatedly - up to 5 times per outer-loop iteration alone, plus again inside the
+    // O(n^2) nested loops below - so memoize it instead of allocating a new File per lookup.
+    val parentCache = HashMap<String, String?>()
+    fun parentOf(p: String) = parentCache.getOrPut(p) { File(p).parent }
+
     for (path in folders) {
         if (path == RECYCLE_BIN || path == FAVORITES) {
             continue
@@ -379,7 +389,7 @@ fun Context.getDirectParentSubfolders(
                 continue
             }
 
-            if (!File(path).parent.equals(currentPathPrefix, true)) {
+            if (!parentOf(path).equals(currentPathPrefix, true)) {
                 continue
             }
         }
@@ -387,20 +397,20 @@ fun Context.getDirectParentSubfolders(
         if (
             currentPathPrefix.isNotEmpty() &&
             path.equals(currentPathPrefix, true)
-            || File(path).parent.equals(currentPathPrefix, true)
+            || parentOf(path).equals(currentPathPrefix, true)
         ) {
             currentPaths.add(path)
         } else if (
             folders.any {
-                !it.equals(path, true) && (File(path).parent.equals(it, true)
-                    || File(it).parent.equals(File(path).parent, true))
+                !it.equals(path, true) && (parentOf(path).equals(it, true)
+                    || parentOf(it).equals(parentOf(path), true))
             }
         ) {
             // if we have folders like
             // /storage/emulated/0/Pictures/Images and
             // /storage/emulated/0/Pictures/Screenshots,
             // but /storage/emulated/0/Pictures is empty, still Pictures with the first folders thumbnails and proper other info
-            val parent = File(path).parent
+            val parent = parentOf(path)
             if (
                 parent != null
                 && !folders.contains(parent)
@@ -423,7 +433,7 @@ fun Context.getDirectParentSubfolders(
             if (
                 !foldersWithoutMediaFiles.contains(it)
                 && !it.equals(path, true)
-                && File(it).parent?.equals(path, true) == true
+                && parentOf(it)?.equals(path, true) == true
             ) {
                 areDirectSubfoldersAvailable = true
             }
@@ -474,11 +484,12 @@ fun Context.updateSubfolderCounts(
         }
 
         // make sure we count only the proper direct subfolders, grouped the same way as on the main screen
+        val childParent = File(child.path).parent
         parentDirs.firstOrNull { it.path == longestSharedPath }?.apply {
             if (
                 path.equals(child.path, true)
-                || path.equals(File(child.path).parent, true)
-                || children.any { it.path.equals(File(child.path).parent, true) }
+                || path.equals(childParent, true)
+                || children.any { it.path.equals(childParent, true) }
             ) {
                 if (child.containsMediaFilesDirectly) {
                     subfoldersCount++
