@@ -1057,18 +1057,25 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     }
 
     private fun fillExtraOutput(resultData: Intent): Uri? {
-        val file = File(resultData.data!!.path!!)
+        // This path only runs for third-party callers (mIsThirdPartyIntent), so both the
+        // incoming intent's EXTRA_OUTPUT and resultData.data come from whatever app launched
+        // us - a misbehaving caller can pass a non-Uri EXTRA_OUTPUT (ClassCastException) or an
+        // unexpected data Uri, so this can't rely on the well-formed contract with "!!".
+        val path = resultData.data?.path ?: return null
+        val file = File(path)
         var inputStream: InputStream? = null
         var outputStream: OutputStream? = null
         try {
-            val output = intent.extras!!.get(MediaStore.EXTRA_OUTPUT) as Uri
+            val output = intent.extras?.get(MediaStore.EXTRA_OUTPUT) as? Uri ?: return null
+            outputStream = contentResolver.openOutputStream(output) ?: return null
             inputStream = FileInputStream(file)
-            outputStream = contentResolver.openOutputStream(output)
-            inputStream.copyTo(outputStream!!)
+            inputStream.copyTo(outputStream)
         } catch (e: SecurityException) {
             showErrorToast(e)
         } catch (_: FileNotFoundException) {
             return getFilePublicUri(file, BuildConfig.APPLICATION_ID)
+        } catch (e: Exception) {
+            showErrorToast(e)
         } finally {
             inputStream?.close()
             outputStream?.close()
