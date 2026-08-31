@@ -111,17 +111,12 @@ class MediaFetcher(val context: Context) {
             val includedPaths = config.includedFolders
 
             val folderNoMediaStatuses = HashMap<String, Boolean>()
+            // getDistinctPath() resolves the real filesystem path (File.canonicalPath), which
+            // does actual I/O, so memoize it per input path - "folders" commonly repeats the
+            // same path (from getLatestFileFolders(), the hardcoded DCIM/Camera/Pictures
+            // entries, and the MediaStore cursor scan all potentially overlapping).
             val distinctPathsMap = HashMap<String, String>()
-            val distinctPaths = folders.distinctBy {
-                when {
-                    distinctPathsMap.containsKey(it) -> distinctPathsMap[it]
-                    else -> {
-                        val distinct = it.getDistinctPath()
-                        distinctPathsMap[it.getParentPath()] = distinct.getParentPath()
-                        distinct
-                    }
-                }
-            }
+            val distinctPaths = folders.distinctBy { distinctPathsMap.getOrPut(it) { it.getDistinctPath() } }
 
             val noMediaFolders = context.getNoMediaFoldersSync()
             noMediaFolders.forEach { folder ->

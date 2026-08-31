@@ -54,6 +54,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
+import java.util.IdentityHashMap
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -210,49 +211,42 @@ fun Context.getSortedDirectories(source: ArrayList<Directory>): ArrayList<Direct
         return newDirsOrdered
     }
 
+    // Directory.sortValue is a persisted DB column (written by getDirectorySortingValue()
+    // under whatever sorting mode was active at scan time, and read back verbatim by the
+    // SORT_BY_SIZE/COUNT/DATE_MODIFIED branch below). It must not be overwritten here as an
+    // ad-hoc cache for the name/path sort key: dirs' Directory instances are the same objects
+    // referenced elsewhere (this is a shallow clone), so mutating sortValue would both use a
+    // stale value if the sort mode differs from whatever it was computed under last, and could
+    // get that stale/wrong value persisted back to the DB by a later updateDirectory() call on
+    // the same instance. Use a local, scoped cache instead.
+    val nameOrPathKeys = if (sorting and SORT_BY_NAME != 0 || sorting and SORT_BY_PATH != 0) {
+        IdentityHashMap<Directory, String>(dirs.size).apply {
+            dirs.forEach {
+                put(
+                    it,
+                    if (sorting and SORT_BY_NAME != 0) {
+                        it.name.normalizeString().lowercase(Locale.getDefault())
+                    } else {
+                        it.path.lowercase(Locale.getDefault())
+                    }
+                )
+            }
+        }
+    } else {
+        null
+    }
+
+    val alphanumericComparator = if (sorting and SORT_USE_NUMERIC_VALUE != 0) AlphanumericComparator() else null
+
     dirs.sortWith { o1, o2 ->
         o1 as Directory
         o2 as Directory
 
         var result = when {
-            sorting and SORT_BY_NAME != 0 -> {
-                if (o1.sortValue.isEmpty()) {
-                    o1.sortValue = o1.name.lowercase(Locale.getDefault())
-                }
-
-                if (o2.sortValue.isEmpty()) {
-                    o2.sortValue = o2.name.lowercase(Locale.getDefault())
-                }
-
-                if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                    AlphanumericComparator().compare(
-                        string1 = o1.sortValue.normalizeString().lowercase(Locale.getDefault()),
-                        string2 = o2.sortValue.normalizeString().lowercase(Locale.getDefault())
-                    )
-                } else {
-                    o1.sortValue.normalizeString().lowercase(Locale.getDefault())
-                        .compareTo(o2.sortValue.normalizeString().lowercase(Locale.getDefault()))
-                }
-            }
-
-            sorting and SORT_BY_PATH != 0 -> {
-                if (o1.sortValue.isEmpty()) {
-                    o1.sortValue = o1.path.lowercase(Locale.getDefault())
-                }
-
-                if (o2.sortValue.isEmpty()) {
-                    o2.sortValue = o2.path.lowercase(Locale.getDefault())
-                }
-
-                if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                    AlphanumericComparator().compare(
-                        string1 = o1.sortValue.lowercase(Locale.getDefault()),
-                        string2 = o2.sortValue.lowercase(Locale.getDefault())
-                    )
-                } else {
-                    o1.sortValue.lowercase(Locale.getDefault())
-                        .compareTo(o2.sortValue.lowercase(Locale.getDefault()))
-                }
+            sorting and SORT_BY_NAME != 0 || sorting and SORT_BY_PATH != 0 -> {
+                val key1 = nameOrPathKeys!!.getValue(o1)
+                val key2 = nameOrPathKeys.getValue(o2)
+                alphanumericComparator?.compare(key1, key2) ?: key1.compareTo(key2)
             }
 
             // SORT_BY_SIZE, SORT_BY_COUNT, SORT_BY_DATE_MODIFIED are numerical
